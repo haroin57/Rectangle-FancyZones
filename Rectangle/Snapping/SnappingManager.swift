@@ -251,9 +251,12 @@ class SnappingManager {
         case .leftMouseUp:
             if let zone = currentZone {
                 // FancyZones drop: move the window into the highlighted zone.
+                // No canSnap() gate here — the zone modifier held during the
+                // drag is the gate, and canSnap() checks the *separate*
+                // snapModifiers setting, which would otherwise block the drop.
                 zoneOverlay?.hide()
                 box?.orderOut(nil)
-                if let windowElement = windowElement, let windowId = windowId, canSnap(event) {
+                if let windowElement = windowElement, let windowId = windowId {
                     unsnapRestore(windowId: windowId, currentRect: windowElement.frame, cursorLoc: event.cgEvent?.location)
                     windowElement.setFrame(zone.rect.screenFlipped)
                 }
