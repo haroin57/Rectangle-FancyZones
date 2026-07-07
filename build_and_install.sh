@@ -8,11 +8,19 @@ REPO="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="$REPO/build"
 APP="Rectangle.app"
 
-echo "==> Verifying Xcode toolchain"
+echo "==> Locating Xcode toolchain"
+# Prefer the active developer dir; otherwise find Xcode.app and use it via
+# DEVELOPER_DIR so we don't need `sudo xcode-select -s`.
 if ! xcodebuild -version >/dev/null 2>&1; then
-  echo "ERROR: xcodebuild not available. Install Xcode and run:"
-  echo "  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"
-  exit 1
+  XC="$(mdfind "kMDItemCFBundleIdentifier == 'com.apple.dt.Xcode'" 2>/dev/null | head -1)"
+  [ -z "$XC" ] && [ -d /Applications/Xcode.app ] && XC=/Applications/Xcode.app
+  if [ -n "$XC" ] && [ -d "$XC/Contents/Developer" ]; then
+    export DEVELOPER_DIR="$XC/Contents/Developer"
+    echo "  using DEVELOPER_DIR=$DEVELOPER_DIR"
+  else
+    echo "ERROR: full Xcode not found. Install it from the App Store first."
+    exit 1
+  fi
 fi
 xcodebuild -version
 
