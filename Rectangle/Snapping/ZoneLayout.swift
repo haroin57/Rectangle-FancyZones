@@ -46,14 +46,27 @@ enum ZoneLayout {
         return UInt(stored ?? Int(NSEvent.ModifierFlags.shift.rawValue))
     }
 
-    private static var rows: Int {
-        let r = UserDefaults.standard.integer(forKey: "fancyZonesRows")
-        return r > 0 ? r : 2
+    /// Per-monitor key for grid overrides. Uses the display's name so the
+    /// setting sticks to a given monitor across reconnects.
+    static func screenKey(_ screen: NSScreen) -> String {
+        screen.localizedName
     }
 
-    private static var cols: Int {
-        let c = UserDefaults.standard.integer(forKey: "fancyZonesCols")
-        return c > 0 ? c : 3
+    /// Rows for a screen: a per-monitor override (`fancyZonesRows_<name>`) when
+    /// set, else the global default (`fancyZonesRows`), else 2.
+    static func rows(for screen: NSScreen) -> Int {
+        let perMon = UserDefaults.standard.integer(forKey: "fancyZonesRows_" + screenKey(screen))
+        if perMon > 0 { return perMon }
+        let g = UserDefaults.standard.integer(forKey: "fancyZonesRows")
+        return g > 0 ? g : 2
+    }
+
+    /// Columns for a screen: a per-monitor override, else the global default, else 3.
+    static func cols(for screen: NSScreen) -> Int {
+        let perMon = UserDefaults.standard.integer(forKey: "fancyZonesCols_" + screenKey(screen))
+        if perMon > 0 { return perMon }
+        let g = UserDefaults.standard.integer(forKey: "fancyZonesCols")
+        return g > 0 ? g : 3
     }
 
     /// Optional fully-custom layout: JSON array of `[x, y, w, h]` fractions,
@@ -79,7 +92,7 @@ enum ZoneLayout {
     /// The zones for `screen`, resolved to AppKit screen coordinates.
     static func zones(for screen: NSScreen) -> [Zone] {
         let vf = screen.adjustedVisibleFrame()
-        let fractions = customFractions ?? gridFractions()
+        let fractions = customFractions ?? gridFractions(rows: rows(for: screen), cols: cols(for: screen))
         return fractions.map { Zone(rect: resolve($0, in: vf)) }
     }
 
@@ -97,8 +110,7 @@ enum ZoneLayout {
     // MARK: Helpers
 
     /// Uniform grid as top-left-origin fractional rects.
-    private static func gridFractions() -> [CGRect] {
-        let r = rows, c = cols
+    private static func gridFractions(rows r: Int, cols c: Int) -> [CGRect] {
         var out: [CGRect] = []
         out.reserveCapacity(r * c)
         let fw = 1.0 / Double(c)
