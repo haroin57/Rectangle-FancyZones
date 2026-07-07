@@ -342,6 +342,10 @@ extension AppDelegate: NSMenuDelegate {
         updateWindowActionMenuItems(menu: menu)
         updateTodoModeMenuItems(menu: menu)
 
+        // FancyZones: inject (idempotently) and refresh the zone-dragging items.
+        ensureFancyZonesMenu()
+        refreshFancyZonesMenuState()
+
         viewLoggingMenuItem.keyEquivalentModifierMask = .option
         quitMenuItem.keyEquivalent = "q"
         quitMenuItem.keyEquivalentModifierMask = .command

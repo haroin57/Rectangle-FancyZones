@@ -37,10 +37,13 @@ enum ZoneLayout {
     /// Modifier that must be held during a drag to enter zone mode. Stored as
     /// the raw value of `NSEvent.ModifierFlags` intersected with the
     /// device-independent mask (mirrors Rectangle's `snapModifiers`). Defaults
-    /// to the Control key so it never collides with the normal edge snapping.
+    /// to **Shift** (like PowerToys FancyZones). Control is a poor choice on
+    /// macOS because Control-click is a secondary (right) click, so
+    /// Control-dragging a title bar doesn't move the window and the feature
+    /// never triggers.
     static var modifierFlags: UInt {
         let stored = UserDefaults.standard.object(forKey: "fancyZonesModifiers") as? Int
-        return UInt(stored ?? Int(NSEvent.ModifierFlags.control.rawValue))
+        return UInt(stored ?? Int(NSEvent.ModifierFlags.shift.rawValue))
     }
 
     private static var rows: Int {
