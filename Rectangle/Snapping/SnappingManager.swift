@@ -33,6 +33,11 @@ class SnappingManager {
     
     var box: FootprintWindow?
 
+    // FancyZones: overlay shown while dragging with the zone modifier held, and
+    // the zone (screen + target rect in AppKit coords) currently under the cursor.
+    var zoneOverlay: ZoneOverlayWindow?
+    var currentZone: (screen: NSScreen, rect: CGRect)?
+
     let screenDetection = ScreenDetection()
     
     private let marginTop = Defaults.snapEdgeMarginTop.cgFloat
@@ -141,6 +146,9 @@ class SnappingManager {
     
     private func disableSnapping() {
         box = nil
+        zoneOverlay?.hide()
+        zoneOverlay = nil
+        currentZone = nil
         stopEventMonitor()
     }
     
@@ -191,7 +199,47 @@ class SnappingManager {
         }
         return true
     }
-    
+
+    // MARK: FancyZones
+
+    /// True when the configured FancyZones modifier (and only it) is held.
+    func fancyZonesModifierHeld(_ event: NSEvent) -> Bool {
+        let required = ZoneLayout.modifierFlags
+        if required == 0 { return false }
+        return event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue == required
+    }
+
+    /// The screen whose full frame contains `loc` (AppKit coords).
+    func screenContaining(_ loc: CGPoint) -> NSScreen? {
+        NSScreen.screens.first { $0.frame.contains(loc) }
+    }
+
+    /// Update the zone overlay + `currentZone` for the cursor's current position.
+    func handleZoneDrag() {
+        let loc = NSEvent.mouseLocation
+        guard let screen = screenContaining(loc) else {
+            zoneOverlay?.hide()
+            currentZone = nil
+            return
+        }
+        // Make sure the normal edge-snap footprint isn't also showing.
+        if currentSnapArea != nil {
+            box?.orderOut(nil)
+            currentSnapArea = nil
+        }
+        let zones = ZoneLayout.zones(for: screen)
+        let activeIndex = ZoneLayout.zoneIndex(at: loc, for: screen)
+        if zoneOverlay == nil {
+            zoneOverlay = ZoneOverlayWindow()
+        }
+        zoneOverlay?.show(zones: zones, activeIndex: activeIndex, on: screen)
+        if let idx = activeIndex {
+            currentZone = (screen, zones[idx].rect)
+        } else {
+            currentZone = nil
+        }
+    }
+
     func handle(event: NSEvent) {
         switch event.type {
         case .leftMouseDown:
@@ -201,7 +249,17 @@ class SnappingManager {
                 initialWindowRect = windowElement?.frame
             }
         case .leftMouseUp:
-            if let currentSnapArea = self.currentSnapArea {
+            if let zone = currentZone {
+                // FancyZones drop: move the window into the highlighted zone.
+                zoneOverlay?.hide()
+                box?.orderOut(nil)
+                if let windowElement = windowElement, let windowId = windowId, canSnap(event) {
+                    unsnapRestore(windowId: windowId, currentRect: windowElement.frame, cursorLoc: event.cgEvent?.location)
+                    windowElement.setFrame(zone.rect.screenFlipped)
+                }
+                currentZone = nil
+                currentSnapArea = nil
+            } else if let currentSnapArea = self.currentSnapArea {
                 box?.orderOut(nil)
                 currentSnapArea.action.postSnap(windowElement: windowElement, windowId: windowId, screen: currentSnapArea.screen)
                 self.currentSnapArea = nil
@@ -262,6 +320,19 @@ class SnappingManager {
                 }
             }
             if windowMoving {
+                // FancyZones: while the zone modifier is held, show the full
+                // zone grid and track the zone under the cursor instead of the
+                // normal edge snapping.
+                if ZoneLayout.enabled, fancyZonesModifierHeld(event) {
+                    handleZoneDrag()
+                    return
+                } else if currentZone != nil {
+                    // modifier released mid-drag — tear down the zone overlay
+                    // and fall through to the normal edge snapping below.
+                    zoneOverlay?.hide()
+                    currentZone = nil
+                }
+
                 if !canSnap(event) {
                     if currentSnapArea != nil {
                         box?.orderOut(nil)
