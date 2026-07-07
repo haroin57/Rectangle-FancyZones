@@ -34,3 +34,8 @@ build/
 *.dat
 *.dep
 
+
+# oh-my-claudecode session state
+.omc/
+**/.omc/
+build/
